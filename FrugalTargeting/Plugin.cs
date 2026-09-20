@@ -9,7 +9,8 @@ namespace FrugalTargeting
     internal enum TargetingMode
     {
         Default,
-        SelectiveFire
+        Strict,
+        FireOnce
     }
 
     [BepInPlugin(Guid, Name, Version)]
@@ -23,24 +24,32 @@ namespace FrugalTargeting
 
         internal static ConfigEntry<bool> ColorUnengageable;
         internal static ConfigEntry<Color> UnengageableColor;
+        internal static ConfigEntry<Color> FiredColor;
 
-        internal static ConfigEntry<TargetingMode> Mode;
+        // Session-only on purpose: every game start begins in Default.
+        internal static TargetingMode Mode = TargetingMode.Default;
         internal static ConfigEntry<KeyboardShortcut> ToggleModeKey;
         internal static ConfigEntry<float> BombReleaseWindow;
         internal static ConfigEntry<bool> LogWeaponInfo;
 
         internal static ManualLogSource Log;
 
-        internal static bool Selective => Enabled.Value && Mode.Value == TargetingMode.SelectiveFire;
+        /// <summary>Strict rules are active (both Strict and Fire Once).</summary>
+        internal static bool Strict => Enabled.Value && Mode != TargetingMode.Default;
+
+        internal static bool FireOnce => Enabled.Value && Mode == TargetingMode.FireOnce;
 
         private void Update()
         {
             if (!ToggleModeKey.Value.IsDown()) return;
 
-            Mode.Value = Mode.Value == TargetingMode.Default ? TargetingMode.SelectiveFire : TargetingMode.Default;
-            var text = Mode.Value == TargetingMode.SelectiveFire
-                ? "Targeting: <b>Selective fire</b>"
-                : "Targeting: <b>Default</b>";
+            Mode = Mode == TargetingMode.Default ? TargetingMode.Strict
+                : Mode == TargetingMode.Strict ? TargetingMode.FireOnce
+                : TargetingMode.Default;
+            FiredTracker.Clear();
+            var text = Mode == TargetingMode.FireOnce ? "Launch Authorization: <b>Strict Fire Once</b>"
+                : Mode == TargetingMode.Strict ? "Launch Authorization: <b>Strict</b>"
+                : "Launch Authorization: <b>Default</b>";
             try { SceneSingleton<AircraftActionsReport>.i.ReportText(text, 3f); }
             catch { Logger.LogInfo(text); }
         }
@@ -50,10 +59,9 @@ namespace FrugalTargeting
             Log = Logger;
             LogWeaponInfo = Config.Bind("Debug", "LogWeaponInfo", true,
                 "Write a line to LogOutput.log with the weapon's type flags and target requirements whenever you switch weapon station.");
-            Mode = Config.Bind("Targeting", "Mode", TargetingMode.Default,
-                "Default: vanilla firing. SelectiveFire: only engageable targets are fired at, and nothing fires if none qualify.");
             ToggleModeKey = Config.Bind("Targeting", "ToggleModeKey", new KeyboardShortcut(KeyCode.C),
-                "Key that switches between targeting modes.");            BombReleaseWindow = Config.Bind("Targeting", "BombReleaseWindowSeconds", 3f,
+                "Key that cycles Launch Authorization: Default (vanilla firing) -> Strict (only engageable targets are fired at; nothing fires if none qualify) -> Strict Fire Once (Strict, and each target is fired at only once; fired targets turn blue, and pressing fire when all are blue resets them). The game always starts in Default.");
+            BombReleaseWindow = Config.Bind("Targeting", "BombReleaseWindowSeconds", 2f,
                 new ConfigDescription(
                     "Bombs count as engageable only when the HUD release countdown (REL) is within this many seconds of zero.",
                     new AcceptableValueRange<float>(0.5f, 15f)));
@@ -61,6 +69,8 @@ namespace FrugalTargeting
                 "Tint selected targets that won't be fired at (out of range/arc) instead of the normal selected color.");
             UnengageableColor = Config.Bind("HUD", "UnengageableColor", new Color(1f, 0.85f, 0f, 1f),
                 "Marker color for selected targets that won't be fired at.");
+            FiredColor = Config.Bind("HUD", "FiredColor", new Color(1f, 0.2f, 0.9f, 1f),
+                "Marker color for targets already fired on in Strict Fire Once mode.");
             Enabled = Config.Bind("General", "Enabled", true,
                 "Light the fire indicator when any selected target is authorized, and engage only those targets.");
 

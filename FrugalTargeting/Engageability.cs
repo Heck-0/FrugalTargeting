@@ -12,11 +12,13 @@ namespace FrugalTargeting
         public static bool IsEngageable(Aircraft aircraft, WeaponStation station, Unit target)
         {
             var info = station.WeaponInfo;
-            if (info.bomb && !info.glideBomb) return BombInReleaseWindow(aircraft, info, target);
+            if (info.bomb && !info.glideBomb)
+                return !AlreadyFired(target) && BombInReleaseWindow(aircraft, info, target);
 
             var prefab = station.WeaponInfo.weaponPrefab;
             var missile = prefab != null ? prefab.GetComponent<Missile>() : null;
             if (missile == null) return true;
+            if (AlreadyFired(target)) return false;
             if (!aircraft.NetworkHQ.TryGetKnownPosition(target, out var pos)) return false;
 
             var req = station.WeaponInfo.targetRequirements;
@@ -29,6 +31,17 @@ namespace FrugalTargeting
 
             float maxRange = missile.CalcRange(aircraft.speed, self.y, pos.y, dist, target.speed, out _);
             return dist <= maxRange;
+        }
+
+        private static bool AlreadyFired(Unit target) => Plugin.FireOnce && FiredTracker.IsFired(target);
+
+        /// <summary>True for weapons the engageability rules apply to (missiles and bombs).</summary>
+        public static bool IsFilteredWeapon(WeaponStation station)
+        {
+            var info = station.WeaponInfo;
+            if (info.bomb && !info.glideBomb) return true;
+            var prefab = info.weaponPrefab;
+            return prefab != null && prefab.GetComponent<Missile>() != null;
         }
 
         /// <summary>

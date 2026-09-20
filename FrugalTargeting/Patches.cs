@@ -22,9 +22,19 @@ namespace FrugalTargeting
             Image ___noShoot, TextMeshProUGUI ___hint, Aircraft ___aircraft,
             WeaponStation ___weaponStation, List<Unit> ___targetList)
         {
-            if (!Plugin.Selective || ___hidden || ___targetList.Count == 0)
+            if (!Plugin.Strict || ___hidden || ___targetList.Count == 0)
             {
                 forced = false;
+                return;
+            }
+
+            if (Plugin.FireOnce && FiredTracker.AllFired(___targetList))
+            {
+                forced = false;
+                ___allRequirementsMet = false;
+                ___noShoot.enabled = true;
+                ___hint.enabled = true;
+                ___hint.text = "ALL FIRED - PRESS FIRE TO RESET";
                 return;
             }
 
@@ -47,7 +57,8 @@ namespace FrugalTargeting
             ___allRequirementsMet = true;
             ___noShoot.enabled = false;
             ___hint.enabled = true;
-            ___hint.text = ok.Count < ___targetList.Count ? $"SHOOT {ok.Count}/{___targetList.Count}" : "SHOOT";
+            int total = ___targetList.Count - (Plugin.FireOnce ? FiredTracker.CountIn(___targetList) : 0);
+            ___hint.text = ok.Count < total ? $"SHOOT {ok.Count}/{total}" : "SHOOT";
         }
     }
 
@@ -59,6 +70,8 @@ namespace FrugalTargeting
             Aircraft ___aircraft, WeaponStation ___currentWeaponStation,
             List<Unit> ___targetList, Dictionary<Unit, HUDUnitMarker> ___markerLookup)
         {
+            FiredTracker.Prune(___targetList);
+
             if (!Plugin.Enabled.Value || !Plugin.ColorUnengageable.Value) return;
             if (___aircraft == null || ___currentWeaponStation == null || ___targetList.Count == 0) return;
 
@@ -68,31 +81,79 @@ namespace FrugalTargeting
             foreach (var unit in ___targetList)
             {
                 if (unit == null || !___markerLookup.TryGetValue(unit, out var marker) || marker.image == null) continue;
-                marker.image.color = Engageability.EngageableThisFrame(unit) ? selected : Plugin.UnengageableColor.Value;
+
+                if (Plugin.FireOnce && FiredTracker.IsFired(unit))
+                    marker.image.color = Plugin.FiredColor.Value;
+                else
+                    marker.image.color = Engageability.EngageableThisFrame(unit) ? selected : Plugin.UnengageableColor.Value;
             }
         }
     }
 
-    /// <summary>Restrict the salvo to engageable targets (leave vanilla behaviour if none qualify).</summary>
+    /// <summary>
+    /// Restrict the salvo to targets engageable at the moment of the press, so we don't spend salvo time on
+    /// targets that are obviously out (each shot is re-checked again at launch by LaunchTrackPatch).
+    /// </summary>
     [HarmonyPatch(typeof(WeaponManager), "SalvoFire")]
     internal static class SalvoFilterPatch
     {
         static void Prefix(ref List<Unit> targets, Aircraft ___aircraft, WeaponStation ___currentWeaponStation)
         {
-            if (!Plugin.Selective) return;
+            if (!Plugin.Strict) return;
             var ok = Engageability.Filter(___aircraft, ___currentWeaponStation, targets);
             if (ok.Count > 0) targets = ok;
         }
     }
 
-    /// <summary>Selective fire: do nothing when targets are selected but none can be engaged.</summary>
+    /// <summary>Strict launch authorization: do nothing when targets are selected but none can be engaged.</summary>
     [HarmonyPatch(typeof(WeaponManager), nameof(WeaponManager.Fire))]
     internal static class NoEngageableTargetsPatch
     {
         static bool Prefix(Aircraft ___aircraft, WeaponStation ___currentWeaponStation, List<Unit> ___targetList)
         {
-            if (!Plugin.Selective || ___currentWeaponStation == null || ___targetList.Count == 0) return true;
+            if (!Plugin.Strict || ___currentWeaponStation == null || ___targetList.Count == 0) return true;
+
+            // Fire Once: with every target already fired on, this press only resets the marks.
+            if (Plugin.FireOnce && Engageability.IsFilteredWeapon(___currentWeaponStation)
+                && FiredTracker.AllFired(___targetList))
+            {
+                FiredTracker.Clear();
+                return false;
+            }
+
             return Engageability.Filter(___aircraft, ___currentWeaponStation, ___targetList).Count > 0;
+        }
+    }
+
+    /// <summary>
+    /// Every launch, including each shot of a salvo, goes through LaunchMount.
+    /// Strict modes: re-check the target at the moment of launch and skip the shot if it no longer qualifies
+    /// (the salvo is spread over several seconds, during which the aircraft may have turned away).
+    /// Strict Fire Once: remember which target each launch was aimed at.
+    /// </summary>
+    [HarmonyPatch(typeof(WeaponStation), nameof(WeaponStation.LaunchMount))]
+    internal static class LaunchTrackPatch
+    {
+        static bool Prefix(WeaponStation __instance, Unit owner, Unit target, out int __state)
+        {
+            __state = __instance.Ammo;
+            if (!Plugin.Strict || target == null) return true;
+
+            var hud = SceneSingleton<CombatHUD>.i;
+            if (hud == null || hud.aircraft == null || owner != hud.aircraft) return true;
+            if (!Engageability.IsFilteredWeapon(__instance)) return true;
+
+            return Engageability.IsEngageable(hud.aircraft, __instance, target);
+        }
+
+        static void Postfix(WeaponStation __instance, Unit owner, Unit target, int __state)
+        {
+            if (!Plugin.FireOnce || target == null) return;
+            var hud = SceneSingleton<CombatHUD>.i;
+            if (hud == null || owner != hud.aircraft) return;
+            // Only count launches that actually used a round (a skipped or failed launch leaves ammo unchanged).
+            if (__instance.Ammo >= __state || !Engageability.IsFilteredWeapon(__instance)) return;
+            FiredTracker.Mark(target);
         }
     }
 
