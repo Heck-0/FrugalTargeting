@@ -39,9 +39,22 @@ namespace FrugalTargeting
 
         internal static bool FireOnce => Enabled.Value && Mode == TargetingMode.FireOnce;
 
+        /// <summary>
+        /// KeyboardShortcut.IsDown() only fires on the exact combination, so it stops working while any other
+        /// key (like a flight control) is held. Check the main key plus its configured modifiers only.
+        /// </summary>
+        private static bool ToggleDown()
+        {
+            var shortcut = ToggleModeKey.Value;
+            if (shortcut.MainKey == KeyCode.None || !UnityInput.Current.GetKeyDown(shortcut.MainKey)) return false;
+            foreach (var modifier in shortcut.Modifiers)
+                if (!UnityInput.Current.GetKey(modifier)) return false;
+            return true;
+        }
+
         private void Update()
         {
-            if (!ToggleModeKey.Value.IsDown()) return;
+            if (!ToggleDown()) return;
 
             Mode = Mode == TargetingMode.Default ? TargetingMode.Strict
                 : Mode == TargetingMode.Strict ? TargetingMode.FireOnce
