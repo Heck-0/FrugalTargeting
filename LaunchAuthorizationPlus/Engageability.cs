@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-namespace FrugalTargeting
+namespace LaunchAuthorizationPlus
 {
     internal static class Engageability
     {

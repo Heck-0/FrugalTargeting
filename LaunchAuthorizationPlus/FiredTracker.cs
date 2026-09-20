@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 
-namespace FrugalTargeting
+namespace LaunchAuthorizationPlus
 {
     internal static class FiredTracker
     {

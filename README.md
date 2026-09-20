@@ -1,103 +1,148 @@
-# FrugalTargeting
+# LaunchAuthorization+
 
-A [BepInEx](https://github.com/BepInEx/BepInEx) mod for **Nuclear Option** that makes multi-target weapon launches smarter, so you stop wasting missiles and bombs.
+*Multi-target weapons release authorization for Nuclear Option.*
 
-In the base game, when you lock several targets the fire indicator only shows SHOOT if *every* target is in range and arc, and one press fires at all of them regardless. FrugalTargeting judges each target on its own, marks the ones that won't be fired at, and (optionally) only launches at the ones that qualify. Lock targets in two different directions, turn toward one group, and fire at just that group.
+A [BepInEx](https://github.com/BepInEx/BepInEx) mod for **Nuclear Option**.
 
-## Features
+## 1. Purpose
 
-### Launch Authorization modes
+In the unmodified game, releasing on a multi-target set is all-or-nothing. The release cue shows `SHOOT` only when every designated target is within range and arc, and a single trigger press launches against every designated target regardless of whether it is within parameters.
 
-Press the toggle key (default `C`) to cycle through three modes. The game always starts in **Default**, and an on-screen message confirms each switch.
+LaunchAuthorization+ evaluates each designated target independently against its launch acceptable region (LAR), the envelope of range, arc and timing in which a weapon can be employed against it. Targets outside their LAR are flagged, and in the stricter modes launch is restricted to targets that are inside it. This allows the operator to designate targets on different bearings, turn toward one group, and launch against that group only.
 
-| Mode | What it does |
+## 2. Release Authorization Modes
+
+Tap the mode key (default `C`) to cycle through three modes. The mode changes when the key is released. The system initializes in **Default** at every game start, and an on-screen advisory confirms each mode change.
+
+| Mode | Description |
 |---|---|
-| **Default** | Vanilla firing. Pressing fire launches at every locked target. Targets that wouldn't be fired at under the stricter modes are still marked. |
-| **Strict** | Fires only at targets that currently qualify. If none qualify, pressing fire does nothing. |
-| **Strict Fire Once** | Strict, plus each target is fired at only once. Fired targets are marked. When every locked target has been fired at, the next fire press only clears the marks and launches nothing; press fire again for a fresh round. |
+| **Default** | Unmodified release. One trigger press launches against every designated target. Targets outside parameters are still flagged. |
+| **Strict** | Launch is authorized only against targets currently within parameters. If none are, the trigger press is inhibited. |
+| **Strict Fire Once** | Strict, with a limit of one launch per target per engagement cycle. See [Section 3](#3-strict-fire-once). |
 
-In Strict modes each launch of a salvo is re-checked at the moment it happens. If you have turned away from a target by its turn in the salvo, that shot is skipped, and the target is not marked as fired.
+In both Strict modes, each launch in a salvo is re-evaluated at the moment it is made. If the aircraft has rotated out of parameters on a target by that shot's turn in the salvo, the launch is skipped and the target is not flagged as engaged.
 
-### Marker colors
+## 3. Strict Fire Once
 
-Selected targets are recolored on your HUD every frame:
+Strict Fire Once applies all Strict criteria and adds a re-attack lockout: **each designated target is engaged once, and only once, per cycle.** This allows a target set too large or too widely spread to be prosecuted from a single attack heading to be worked across multiple passes, without expending a second weapon on a target already engaged.
+
+Example: a large number of ground targets is spread across a fairly wide area, and no single heading lines up with all of them. Designate the full set, then make an attack pass and press the trigger. Weapons are launched against the targets within parameters at that moment, and those targets are flagged magenta. Reposition onto another part of the area and press the trigger again. Flagged targets are skipped, so no weapon is expended on them, and only targets not yet engaged receive weapons. Continue making passes until every target is flagged.
+
+### 3.1 Procedure
+
+1. Designate all targets.
+2. Make an attack pass and press the trigger. A weapon is launched against each target within parameters at that instant. Each engaged target is flagged **magenta**.
+3. Reposition and press the trigger again. Flagged targets are locked out. Only targets not yet engaged and currently within parameters receive weapons.
+4. Targets outside parameters (yellow) are left alone and remain unengaged, so they can be prosecuted once the aircraft is in position.
+5. Repeat until all designated targets are flagged.
+
+A target is flagged only when a weapon physically leaves the station. A launch skipped because the aircraft had rotated out of parameters by that shot's turn in the salvo does not flag the target.
+
+Until every designated target is flagged, a trigger press launches only against targets that are both unengaged and currently within parameters. If there are none, the trigger press is inhibited, as in Strict.
+
+### 3.2 Cycle Reset
+
+| Method | Procedure |
+|---|---|
+| **Complete** | When every designated target is flagged, the missile HUD displays `ALL ENGD - RESET`. The next trigger press clears all flags and inhibits launch. Press the trigger again to begin a new cycle on the same targets. |
+| **Manual** | Hold the mode key for approximately 0.5 seconds (`ResetHoldSeconds`). All flags are cleared, the mode remains Strict Fire Once, and a "Fired marks reset" advisory is displayed. A quick tap still cycles the mode. Holding the key in the other modes has no effect. |
+| **Single target** | Deselect the target and designate it again to clear its flag only. |
+| **Mode change** | Cycling modes clears all flags. |
+
+### 3.3 Notes
+
+- **"Fired" means launched, not a confirmed hit.** A launch that misses is still counted and remains flagged until reset.
+- **Flags are shared across weapons.** A target engaged with a missile is also skipped by bombs until reset.
+- **Guns do not flag targets.** Only missiles, bombs and laser-guided weapons do.
+
+## 4. Target Flagging
+
+Designated targets are recolored on the HUD every frame.
 
 | Color | Meaning |
 |---|---|
-| Green | Selected and will be fired at (the game's normal selected color) |
-| Yellow | Selected but won't be fired at (out of range, arc, window, or not lased) |
-| Magenta | Already fired at (Strict Fire Once) |
+| Green | Designated, within parameters (the game's normal selected color). |
+| Yellow | Designated, outside parameters (range, arc, release window, or not lased). |
+| Magenta | Already engaged (Strict Fire Once). |
 
-Both colors are configurable. The yellow marking works in every mode, including Default.
+The yellow and magenta colors are configurable. Yellow flagging is active in every mode, including Default.
 
-### Weapon support
+## 5. Weapons Employment
 
-| Weapon | Rule for a target to qualify |
+Each target is evaluated independently, following the game's own indicators.
+
+| Weapon | Behavior |
 |---|---|
-| **Missiles** | Minimum range, launch speed, arc (`minAlignment`), and the missile's own range at that target's distance and altitude. |
-| **Bombs** | The target must be ahead of and below you, and the release countdown (the HUD's `REL`) must be within a window of zero. Default is 2 s, the same range where the game's `REL` text turns green. |
-| **Laser-guided weapons** | The target must be lased by your own designator. Laser bombs use the bomb rule as well. Other laser weapons use the game's laser-HUD range and arc rule. |
-| **Glide bombs** | Use the missile rule. |
-| **Guns, cargo, slings** | Never filtered. |
+| **Missiles** | Mirrors when the game shows the `SHOOT` indicator. |
+| **Bombs** | Mirrors when the game's `REL` indicator turns green. |
+| **Laser-guided weapons** | Follow the missile or bomb rules, and the target must also be lased by the operator's own designator. |
+| **Glide bombs** | Mirror when the game shows the `SHOOT` indicator. |
+| **Guns** | Unchanged. |
+| **Cargo and slings** | Unchanged. |
 
-### Fire indicator
+## 6. Fire Indicator
 
-On the missile HUD, in Strict modes, the SHOOT indicator lights when *any* locked target qualifies. It shows `SHOOT n/m` when only some do. In Strict Fire Once it shows `ALL FIRED - PRESS FIRE TO RESET` when every target has been fired at. Bomb and laser HUDs have no SHOOT text of their own here, so the marker colors are the feedback.
+On the missile HUD, in both Strict modes, the following cues are displayed:
 
-## Requirements
+| Cue | Meaning |
+|---|---|
+| `SHOOT` | Every designated target is within the LAR. |
+| `SHOOT n/m` | Only `n` of `m` designated targets are within the LAR. |
+| `NO TGT IN LAR` | No designated target is within the LAR. The trigger press is inhibited. |
+| `ALL ENGD - RESET` | Strict Fire Once only. Every designated target has been engaged. The next trigger press resets the cycle. |
+
+The bomb and laser HUDs have no `SHOOT` text of their own, so target flagging (Section 4) is the cue on those weapons.
+
+## 7. Requirements
 
 - Nuclear Option (Steam)
 - [BepInEx 5.x](https://github.com/BepInEx/BepInEx/releases), **x64 Mono**
-- Optional: [BepInEx.ConfigurationManager](https://github.com/BepInEx/BepInEx.ConfigurationManager) to edit settings in game with `F1`
+- Optional: [BepInEx.ConfigurationManager](https://github.com/BepInEx/BepInEx.ConfigurationManager), for editing settings in game with `F1`
 
-If you use ConfigurationManager, set `HideManagerGameObject = true` under `[Chainloader]` in `BepInEx\config\BepInEx.cfg`.
+If ConfigurationManager is used, set `HideManagerGameObject = true` under `[Chainloader]` in `BepInEx\config\BepInEx.cfg`.
 
-## Install
+## 8. Installation
 
-1. Install BepInEx 5.x into your Nuclear Option folder (it should contain `winhttp.dll` and a `BepInEx` folder).
-2. Create `Nuclear Option\BepInEx\plugins\FrugalTargeting\`.
-3. Copy `FrugalTargeting.dll` into it.
-4. Launch the game. `BepInEx\LogOutput.log` should contain `Frugal Targeting 0.1.0 loaded`.
+1. Install BepInEx 5.x into the Nuclear Option folder. The folder should contain `winhttp.dll` and a `BepInEx` folder.
+2. Create `Nuclear Option\BepInEx\plugins\LaunchAuthorizationPlus\`.
+3. Copy `LaunchAuthorizationPlus.dll` into it.
+4. Launch the game. `BepInEx\LogOutput.log` should contain `LaunchAuthorization+ 0.1.0 loaded`.
 
-To uninstall, delete the `FrugalTargeting` folder from `BepInEx\plugins\`.
+To uninstall, delete the `LaunchAuthorizationPlus` folder from `BepInEx\plugins\`.
 
-## Configuration
+## 9. Configuration
 
-The config file is created on first run at `BepInEx\config\com.heck0.frugaltargeting.cfg`. Every setting is also available in the `F1` menu.
+The config file is created on first run at `BepInEx\config\com.heck0.launchauthorizationplus.cfg`. Every setting is also available in the `F1` menu.
 
 | Section | Setting | Default | Description |
 |---|---|---|---|
 | General | `Enabled` | `true` | Master switch for all behavior. |
-| Targeting | `ToggleModeKey` | `C` | Key that cycles the launch authorization mode. Only the main key and any modifiers written into the binding are required; other held keys (like flight controls) are ignored. |
-| Targeting | `BombReleaseWindowSeconds` | `2` | Bombs qualify when the `REL` countdown is within this many seconds of zero (0.5 to 15). |
-| Targeting | `LaserAllowFactionLasing` | `false` | Also accept targets lased by a teammate. By default only your own designator counts. |
-| HUD | `ColorUnengageableTargets` | `true` | Recolor selected targets that won't be fired at. |
-| HUD | `UnengageableColor` | yellow | Marker color for those targets. |
-| HUD | `FiredColor` | magenta | Marker color for targets already fired at (Strict Fire Once). |
-| Debug | `LogWeaponInfo` | `true` | Log each weapon's type flags and target requirements when you switch station. |
+| Targeting | `ToggleModeKey` | `C` | Tap to cycle the release authorization mode; hold to reset flags in Strict Fire Once. Only the main key and any modifiers written into the binding are required; other held keys (such as flight controls) are ignored. |
+| Targeting | `ResetHoldSeconds` | `0.5` | Hold time for the manual reset (0.2 to 3). A shorter press is a tap and cycles the mode. |
+| Targeting | `BombReleaseWindowSeconds` | `2` | Bombs are within parameters when the `REL` countdown is within this many seconds of zero (0.5 to 15). |
+| Targeting | `LaserAllowFactionLasing` | `false` | Also accept targets lased by a teammate. By default only the operator's own designator counts. |
+| HUD | `ColorUnengageableTargets` | `true` | Recolor designated targets that are outside parameters. |
+| HUD | `UnengageableColor` | yellow | Flag color for targets outside parameters. |
+| HUD | `FiredColor` | magenta | Flag color for targets already engaged (Strict Fire Once). |
+| Debug | `LogWeaponInfo` | `true` | Log each weapon's type flags and target requirements when the weapon station is changed. |
 
-## Notes and limitations
+## 10. Notes and Limitations
 
-- **Client-side only.** Launches are owned by the firing player's game, so nothing has to be installed on the server or on other players' machines. Whether a given server allows mods is up to that server.
-- **"Fired" means launched, not hit.** A target turns magenta when a round leaves the rail. A missed shot still counts.
-- **Fired marks are shared across weapons.** A target hit with a missile is also skipped by bombs until you reset. Deselecting and re-locking a target resets it, and changing mode clears all marks.
-- **The target list is fixed when you press fire.** A target that becomes eligible mid-salvo is not added, but one that stops being eligible is skipped.
-- **Bomb accuracy is limited by the game's own release estimate**, which ignores drag and assumes you hold your speed and heading. If bombs land off target, try lowering `BombReleaseWindowSeconds`.
-- **Guns** never turn a target magenta and are not blocked.
+- **Client-side only.** Launches are owned by the launching player's game, so nothing has to be installed on the server or on other players' machines. Whether a given server permits mods is determined by that server.
+- **The target set is fixed at the trigger press.** A target that comes within parameters mid-salvo is not added. A target that leaves parameters mid-salvo is skipped.
+- **Bomb accuracy is limited by the game's own release estimate**, which ignores drag and assumes the aircraft holds its speed and heading. If bombs land off target, lower `BombReleaseWindowSeconds`.
 - **Other mods** that change target selection or recolor HUD markers may conflict.
 
-## Building
+## 11. Building
 
-Requires the .NET SDK. The project references the game's assemblies from your install, using the `NUCLEAR_OPTION_DIR` environment variable or falling back to `C:\Program Files (x86)\Steam\steamapps\common\Nuclear Option`. Building also copies the DLL into `BepInEx\plugins\FrugalTargeting\` in that folder.
-
-```
-dotnet build FrugalTargeting\FrugalTargeting.csproj -c Release
-```
-
-To build for a different install location without setting the environment variable:
+Requires the .NET SDK. The project references the game's assemblies from the installation, using the `NUCLEAR_OPTION_DIR` environment variable or falling back to `C:\Program Files (x86)\Steam\steamapps\common\Nuclear Option`. Building also copies the DLL into `BepInEx\plugins\LaunchAuthorizationPlus\` in that folder.
 
 ```
-dotnet build FrugalTargeting\FrugalTargeting.csproj -c Release -p:GameDir="D:\Games\Nuclear Option"
+dotnet build LaunchAuthorizationPlus\LaunchAuthorizationPlus.csproj -c Release
 ```
 
-Close the game first, because Windows will not overwrite a loaded DLL.
+To build against a different installation without setting the environment variable:
+
+```
+dotnet build LaunchAuthorizationPlus\LaunchAuthorizationPlus.csproj -c Release -p:GameDir="D:\Games\Nuclear Option"
+```

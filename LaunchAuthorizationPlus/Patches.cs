@@ -5,7 +5,7 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
-namespace FrugalTargeting
+namespace LaunchAuthorizationPlus
 {
     [HarmonyPatch(typeof(HUDMissileState), "DisplayText")]
     internal static class HudIndicatorPatch
@@ -29,7 +29,7 @@ namespace FrugalTargeting
                 ___allRequirementsMet = false;
                 ___noShoot.enabled = true;
                 ___hint.enabled = true;
-                ___hint.text = "ALL FIRED - PRESS FIRE TO RESET";
+                ___hint.text = "ALL ENGD - RESET";
                 return;
             }
 
@@ -42,7 +42,7 @@ namespace FrugalTargeting
                     ___allRequirementsMet = false;
                     ___noShoot.enabled = true;
                     ___hint.enabled = true;
-                    ___hint.text = "NO VALID TARGET";
+                    ___hint.text = "NO TGT IN LAR";
                 }
                 return;
             }

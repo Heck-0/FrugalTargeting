@@ -1,6 +1,6 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FrugalTargeting", "FrugalTargeting\FrugalTargeting.csproj", "{C5B57324-F01F-42B0-AEF1-DC91BF3A12FE}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LaunchAuthorizationPlus", "LaunchAuthorizationPlus\LaunchAuthorizationPlus.csproj", "{C5B57324-F01F-42B0-AEF1-DC91BF3A12FE}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

@@ -2,8 +2,8 @@
 
     <PropertyGroup>
         <TargetFramework>net472</TargetFramework>
-        <AssemblyName>FrugalTargeting</AssemblyName>
-        <RootNamespace>FrugalTargeting</RootNamespace>
+        <AssemblyName>LaunchAuthorizationPlus</AssemblyName>
+        <RootNamespace>LaunchAuthorizationPlus</RootNamespace>
         <LangVersion>latest</LangVersion>
         <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
         <DebugType>embedded</DebugType>
@@ -30,8 +30,8 @@
     </ItemGroup>
 
     <Target Name="CopyToPlugins" AfterTargets="Build">
-        <Copy SourceFiles="$(OutputPath)FrugalTargeting.dll"
-              DestinationFolder="$(GameDir)\BepInEx\plugins\FrugalTargeting\"/>
+        <Copy SourceFiles="$(OutputPath)LaunchAuthorizationPlus.dll"
+              DestinationFolder="$(GameDir)\BepInEx\plugins\LaunchAuthorizationPlus\"/>
     </Target>
 
 </Project>
