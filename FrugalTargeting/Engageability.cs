@@ -5,13 +5,11 @@ namespace FrugalTargeting
 {
     internal static class Engageability
     {
-        /// <summary>
-        /// Per-target version of the game's aggregate check (range / min range / arc / speed).
-        /// Bombs use the release-time window instead. Other weapons are never filtered.
-        /// </summary>
         public static bool IsEngageable(Aircraft aircraft, WeaponStation station, Unit target)
         {
             var info = station.WeaponInfo;
+            if (info.laserGuided && !IsLasedByUs(aircraft, target)) return false;
+
             if (info.bomb && !info.glideBomb)
                 return !AlreadyFired(target) && BombInReleaseWindow(aircraft, info, target);
 
@@ -26,6 +24,14 @@ namespace FrugalTargeting
             float dist = FastMath.Distance(pos, self);
 
             if (dist < req.minRange) return false;
+
+            if (info.laserGuided)
+            {
+                float arc = Mathf.Min(req.minAlignment, Mathf.Max(dist, req.minRange) * 0.002f);
+                if (Vector3.Angle(pos - self, aircraft.transform.forward) > arc) return false;
+                return dist <= missile.CalcRange(aircraft.speed, self.y, pos.y, dist, 0f, out _);
+            }
+
             if (aircraft.speed < req.minOwnerSpeed) return false;
             if (Vector3.Angle(pos - self, aircraft.transform.forward) > req.minAlignment) return false;
 
@@ -35,19 +41,21 @@ namespace FrugalTargeting
 
         private static bool AlreadyFired(Unit target) => Plugin.FireOnce && FiredTracker.IsFired(target);
 
-        /// <summary>True for weapons the engageability rules apply to (missiles and bombs).</summary>
+        private static bool IsLasedByUs(Aircraft aircraft, Unit target)
+        {
+            var designator = aircraft.GetLaserDesignator();
+            if (designator != null && designator.IsLased(target)) return true;
+            return Plugin.LaserAllowFactionLasing.Value && aircraft.NetworkHQ.IsTargetLased(target);
+        }
+
         public static bool IsFilteredWeapon(WeaponStation station)
         {
             var info = station.WeaponInfo;
-            if (info.bomb && !info.glideBomb) return true;
+            if (info.laserGuided || (info.bomb && !info.glideBomb)) return true;
             var prefab = info.weaponPrefab;
             return prefab != null && prefab.GetComponent<Missile>() != null;
         }
 
-        /// <summary>
-        /// Same release-time maths as the game's HUDBombingState ("REL t"): true when the target is
-        /// ahead of and below the aircraft and the release moment is within the configured window.
-        /// </summary>
         private static bool BombInReleaseWindow(Aircraft aircraft, WeaponInfo info, Unit target)
         {
             if (!aircraft.NetworkHQ.TryGetKnownPosition(target, out var pos)) return false;
@@ -76,10 +84,6 @@ namespace FrugalTargeting
         private static readonly HashSet<Unit> FrameSet = new HashSet<Unit>();
         private static int frameStamp = -1;
 
-        /// <summary>
-        /// Engageable targets for the current frame, computed once and shared by the HUD patches.
-        /// The returned list is reused; don't keep it.
-        /// </summary>
         public static List<Unit> ThisFrame(Aircraft aircraft, WeaponStation station, List<Unit> targets)
         {
             if (frameStamp != Time.frameCount)

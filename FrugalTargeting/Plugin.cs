@@ -26,23 +26,18 @@ namespace FrugalTargeting
         internal static ConfigEntry<Color> UnengageableColor;
         internal static ConfigEntry<Color> FiredColor;
 
-        // Session-only on purpose: every game start begins in Default.
         internal static TargetingMode Mode = TargetingMode.Default;
         internal static ConfigEntry<KeyboardShortcut> ToggleModeKey;
         internal static ConfigEntry<float> BombReleaseWindow;
+        internal static ConfigEntry<bool> LaserAllowFactionLasing;
         internal static ConfigEntry<bool> LogWeaponInfo;
 
         internal static ManualLogSource Log;
 
-        /// <summary>Strict rules are active (both Strict and Fire Once).</summary>
         internal static bool Strict => Enabled.Value && Mode != TargetingMode.Default;
 
         internal static bool FireOnce => Enabled.Value && Mode == TargetingMode.FireOnce;
 
-        /// <summary>
-        /// KeyboardShortcut.IsDown() only fires on the exact combination, so it stops working while any other
-        /// key (like a flight control) is held. Check the main key plus its configured modifiers only.
-        /// </summary>
         private static bool ToggleDown()
         {
             var shortcut = ToggleModeKey.Value;
@@ -73,7 +68,9 @@ namespace FrugalTargeting
             LogWeaponInfo = Config.Bind("Debug", "LogWeaponInfo", true,
                 "Write a line to LogOutput.log with the weapon's type flags and target requirements whenever you switch weapon station.");
             ToggleModeKey = Config.Bind("Targeting", "ToggleModeKey", new KeyboardShortcut(KeyCode.C),
-                "Key that cycles Launch Authorization: Default (vanilla firing) -> Strict (only engageable targets are fired at; nothing fires if none qualify) -> Strict Fire Once (Strict, and each target is fired at only once; fired targets turn blue, and pressing fire when all are blue resets them). The game always starts in Default.");
+                "Key that cycles Launch Authorization: Default (vanilla firing) -> Strict (only engageable targets are fired at; nothing fires if none qualify) -> Strict Fire Once (Strict, and each target is fired at only once; fired targets are marked with FiredColor, and pressing fire when all are marked resets them). The game always starts in Default.");
+            LaserAllowFactionLasing = Config.Bind("Targeting", "LaserAllowFactionLasing", false,
+                "Laser-guided weapons only count a target as engageable if your own designator is lasing it. Turn this on to also accept targets lased by a teammate.");
             BombReleaseWindow = Config.Bind("Targeting", "BombReleaseWindowSeconds", 2f,
                 new ConfigDescription(
                     "Bombs count as engageable only when the HUD release countdown (REL) is within this many seconds of zero.",
