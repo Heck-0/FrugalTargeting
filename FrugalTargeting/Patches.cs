@@ -14,32 +14,47 @@ namespace FrugalTargeting
     [HarmonyPatch(typeof(HUDMissileState), "DisplayText")]
     internal static class HudIndicatorPatch
     {
+        // True while our override is on screen, so it can be undone the moment no target qualifies.
+        private static bool forced;
+
         static void Postfix(
-            ref bool ___allRequirementsMet, bool ___hidden, float ___lastTextDisplay,
+            ref bool ___allRequirementsMet, bool ___hidden,
             Image ___noShoot, TextMeshProUGUI ___hint, Aircraft ___aircraft,
             WeaponStation ___weaponStation, List<Unit> ___targetList)
         {
-            if (!Plugin.Selective || ___hidden || ___targetList.Count == 0) return;
-            // Only refresh right after the game's own (throttled) text update.
-            if (___lastTextDisplay != Time.timeSinceLevelLoad) return;
+            if (!Plugin.Selective || ___hidden || ___targetList.Count == 0)
+            {
+                forced = false;
+                return;
+            }
 
-            int ok = Engageability.Filter(___aircraft, ___weaponStation, ___targetList).Count;
-            if (ok == 0) return;
+            var ok = Engageability.ThisFrame(___aircraft, ___weaponStation, ___targetList);
+            if (ok.Count == 0)
+            {
+                if (forced)
+                {
+                    // The game's own text is stale (it refreshes on its own tick), so show a neutral reason.
+                    forced = false;
+                    ___allRequirementsMet = false;
+                    ___noShoot.enabled = true;
+                    ___hint.enabled = true;
+                    ___hint.text = "NO VALID TARGET";
+                }
+                return;
+            }
 
+            forced = true;
             ___allRequirementsMet = true;
             ___noShoot.enabled = false;
             ___hint.enabled = true;
-            ___hint.text = ok < ___targetList.Count ? $"SHOOT {ok}/{___targetList.Count}" : "SHOOT";
+            ___hint.text = ok.Count < ___targetList.Count ? $"SHOOT {ok.Count}/{___targetList.Count}" : "SHOOT";
         }
     }
 
-    /// <summary>Tint selected markers red when the target won't be fired at.</summary>
+    /// <summary>Tint selected markers when the target won't be fired at.</summary>
     [HarmonyPatch(typeof(CombatHUD), "LateUpdate")]
     internal static class MarkerColorPatch
     {
-        private static readonly HashSet<Unit> Engageable = new HashSet<Unit>();
-        private static float lastCalc;
-
         static void Postfix(
             Aircraft ___aircraft, WeaponStation ___currentWeaponStation,
             List<Unit> ___targetList, Dictionary<Unit, HUDUnitMarker> ___markerLookup)
@@ -47,19 +62,13 @@ namespace FrugalTargeting
             if (!Plugin.Enabled.Value || !Plugin.ColorUnengageable.Value) return;
             if (___aircraft == null || ___currentWeaponStation == null || ___targetList.Count == 0) return;
 
-            if (Time.timeSinceLevelLoad - lastCalc > 0.1f)
-            {
-                lastCalc = Time.timeSinceLevelLoad;
-                Engageable.Clear();
-                foreach (var u in Engageability.Filter(___aircraft, ___currentWeaponStation, ___targetList))
-                    Engageable.Add(u);
-            }
+            Engageability.ThisFrame(___aircraft, ___currentWeaponStation, ___targetList);
 
             var selected = ThemeManager.Active.ColorTheme.HudUnitSelected;
             foreach (var unit in ___targetList)
             {
                 if (unit == null || !___markerLookup.TryGetValue(unit, out var marker) || marker.image == null) continue;
-                marker.image.color = Engageable.Contains(unit) ? selected : Plugin.UnengageableColor.Value;
+                marker.image.color = Engageability.EngageableThisFrame(unit) ? selected : Plugin.UnengageableColor.Value;
             }
         }
     }
@@ -84,6 +93,24 @@ namespace FrugalTargeting
         {
             if (!Plugin.Selective || ___currentWeaponStation == null || ___targetList.Count == 0) return true;
             return Engageability.Filter(___aircraft, ___currentWeaponStation, ___targetList).Count > 0;
+        }
+    }
+
+    /// <summary>Logs each weapon's type flags and target requirements when the station changes.</summary>
+    [HarmonyPatch(typeof(CombatHUD), nameof(CombatHUD.ShowWeaponStation))]
+    internal static class WeaponInfoLogPatch
+    {
+        static void Postfix(WeaponStation weaponStation)
+        {
+            if (!Plugin.LogWeaponInfo.Value || weaponStation == null) return;
+            var i = weaponStation.WeaponInfo;
+            var r = i.targetRequirements;
+            bool hasMissile = i.weaponPrefab != null && i.weaponPrefab.GetComponent<Missile>() != null;
+            Plugin.Log.LogInfo(
+                $"Weapon '{i.weaponName}': missile={i.missile} bomb={i.bomb} glideBomb={i.glideBomb} " +
+                $"laserGuided={i.laserGuided} boresight={i.boresight} gun={i.gun} fireInterval={i.fireInterval} " +
+                $"hasMissileComponent={hasMissile} | req: minRange={r.minRange} maxRange={r.maxRange} " +
+                $"minAlignment={r.minAlignment} minOwnerSpeed={r.minOwnerSpeed}");
         }
     }
 }
